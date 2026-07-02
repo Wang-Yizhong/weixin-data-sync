@@ -7,7 +7,12 @@
     "dev": "tsx src/app.ts",
     "build": "tsc",
     "start": "node dist/app.js",
-    "test:wechat-articles-api-dev": "tsx scripts/test-wechat-articles-api.ts"
+    "test:wechat-articles-api-dev": "tsx scripts/test-wechat-articles-api.ts",
+    "test:wechat-clean": "tsx scripts/test-wechat-article-cleaner.ts",
+    "debug:wechat-env": "tsx scripts/debug-wechat-env.ts",
+    "setup:wechat-schema-dev": "tsx scripts/setup-wechat-articles-schema-dev.ts",
+    "import:wechat-articles-file-dev": "tsx scripts/import-wechat-articles-from-file-dev.ts",
+    "sync:wechat-articles-dev": "tsx scripts/sync-wechat-articles-dev.ts"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -16,7 +21,9 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "cheerio": "^1.2.0",
     "dotenv": "^17.4.2",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "mysql2": "^3.22.5"
   }
 }

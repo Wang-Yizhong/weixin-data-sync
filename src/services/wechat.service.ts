@@ -51,6 +51,18 @@ const BATCH_BODY = {
   no_content: 0,
 };
 
+function maskAppId(appId: string | undefined): string | null {
+  if (!appId) {
+    return null;
+  }
+
+  if (appId.length <= 8) {
+    return `${appId.slice(0, 2)}...`;
+  }
+
+  return `${appId.slice(0, 6)}...${appId.slice(-4)}`;
+}
+
 function getWechatConfig(): { appId: string; appSecret: string } {
   const appId = process.env.WECHAT_APP_ID;
   const appSecret = process.env.WECHAT_APP_SECRET;
@@ -132,6 +144,24 @@ function sanitizeTokenRaw(raw: WechatRawJson, tokenPreview: string | null): Wech
   return {
     ...raw,
     access_token: tokenPreview,
+  };
+}
+
+export function getWechatApiDebugInfo(): {
+  tokenApiUrl: string;
+  publishedArticlesApiUrl: string;
+  appIdExists: boolean;
+  appSecretExists: boolean;
+  appIdPreview: string | null;
+} {
+  const appId = process.env.WECHAT_APP_ID;
+
+  return {
+    tokenApiUrl: `${TOKEN_API}?grant_type=client_credential&appid=${maskAppId(appId) ?? "<missing>"}&secret=<hidden>`,
+    publishedArticlesApiUrl: `${FREEPUBLISH_API}?access_token=<hidden>`,
+    appIdExists: Boolean(process.env.WECHAT_APP_ID),
+    appSecretExists: Boolean(process.env.WECHAT_APP_SECRET),
+    appIdPreview: maskAppId(appId),
   };
 }
 
