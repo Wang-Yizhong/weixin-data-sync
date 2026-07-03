@@ -169,6 +169,36 @@ data/reports/wechat-articles-full-sync-dev-report.json
 data/reports/wechat-articles-full-sync-dev-report.md
 ```
 
+## 1Panel 脚本库使用说明
+
+项目提供了 4 个部署运维脚本，放在：
+
+```text
+scripts/deploy/
+```
+
+腾讯云服务器首次使用时，在项目目录执行：
+
+```bash
+chmod +x scripts/deploy/*.sh
+```
+
+脚本用途：
+
+- `scripts/deploy/update-weixin.sh`：更新部署。进入 `/opt/weixin-data-sync`，拉取 `origin/main`，安装依赖，构建，并重启 `weixin-data-sync` PM2 服务。
+- `scripts/deploy/sync-wechat.sh`：手动同步公众号文章。进入 `/opt/weixin-data-sync` 后执行 `npm run sync:wechat-articles-dev`。
+- `scripts/deploy/restart-weixin.sh`：仅重启 `weixin-data-sync` PM2 服务并查看进程列表。
+- `scripts/deploy/status-weixin.sh`：查看 PM2 进程和最近 80 行服务日志。
+
+在 1Panel 脚本库中，可以按用途分别复制对应脚本内容：
+
+- 日常更新部署：复制 `scripts/deploy/update-weixin.sh`
+- 手动同步文章：复制 `scripts/deploy/sync-wechat.sh`
+- 快速重启服务：复制 `scripts/deploy/restart-weixin.sh`
+- 查看服务状态：复制 `scripts/deploy/status-weixin.sh`
+
+这些脚本不会打印 `.env`，不会打印 AppSecret、access_token 或数据库密码，也不会执行 `drop` / `truncate` / `delete`。
+
 ## MySQL 表结构
 
 SQL 文件：
