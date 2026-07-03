@@ -14,10 +14,12 @@ type RawArticleItem = {
 };
 
 type PageReport = {
+  page: number;
   offset: number;
   count: number;
   itemCount: number;
   totalCount: number | null;
+  fetchedTotal: number;
   error: string | null;
 };
 
@@ -41,6 +43,7 @@ type FullSyncReport = {
   databaseName: string | null;
   totalCount: number | null;
   fetchedCount: number;
+  pageCount: number;
   inserted: number;
   updated: number;
   failed: number;
@@ -456,6 +459,7 @@ function toMarkdown(report: FullSyncReport): string {
     `- 是否成功：${report.success ? "是" : "否"}`,
     `- total_count：${report.totalCount ?? ""}`,
     `- fetched_count：${report.fetchedCount}`,
+    `- page_count：${report.pageCount}`,
     `- inserted：${report.inserted}`,
     `- updated：${report.updated}`,
     `- failed：${report.failed}`,
@@ -469,8 +473,8 @@ function toMarkdown(report: FullSyncReport): string {
   lines.push("");
   lines.push("## 分页");
   lines.push("");
-  lines.push("| offset | count | item_count | total_count | 错误 |");
-  lines.push("| ---: | ---: | ---: | ---: | --- |");
+  lines.push("| page | offset | count | item_count | total_count | fetched_total | 错误 |");
+  lines.push("| ---: | ---: | ---: | ---: | ---: | ---: | --- |");
 
   for (const page of report.pages) {
     lines.push(
@@ -479,6 +483,7 @@ function toMarkdown(report: FullSyncReport): string {
         page.count,
         page.itemCount,
         page.totalCount ?? "",
+        page.fetchedTotal,
         page.error ?? "",
       ]
         .map(escapeMarkdownCell)
@@ -533,11 +538,25 @@ function writeReport(report: FullSyncReport): void {
 function summarizeReport(report: FullSyncReport): FullSyncReport {
   return {
     ...report,
+    pageCount: report.pages.length,
     inserted: report.articles.filter((article) => article.status === "inserted").length,
     updated: report.articles.filter((article) => article.status === "updated").length,
     failed: report.articles.filter((article) => article.status === "failed").length,
     skipped: report.articles.filter((article) => article.status === "skipped").length,
   };
+}
+
+function printFinalSummary(report: FullSyncReport): void {
+  console.log("================================");
+  console.log("Final Summary");
+  console.log(`total_count: ${report.totalCount ?? "<missing>"}`);
+  console.log(`fetched_count: ${report.fetchedCount}`);
+  console.log(`page_count: ${report.pageCount}`);
+  console.log(`inserted: ${report.inserted}`);
+  console.log(`updated: ${report.updated}`);
+  console.log(`failed: ${report.failed}`);
+  console.log(`skipped: ${report.skipped}`);
+  console.log("================================");
 }
 
 async function main(): Promise<void> {
@@ -559,6 +578,7 @@ async function main(): Promise<void> {
     databaseName: null,
     totalCount: null,
     fetchedCount: 0,
+    pageCount: 0,
     inserted: 0,
     updated: 0,
     failed: 0,
@@ -579,28 +599,45 @@ async function main(): Promise<void> {
     const accessToken = await getAccessToken();
     let offset = 0;
     let totalCount: number | null = null;
+    let fetchedItemCount = 0;
+    let pageIndex = 1;
 
     while (totalCount === null || offset < totalCount) {
-      console.log(`拉取分页：offset=${offset}, count=${PAGE_COUNT}`);
+      console.log("================================");
+      console.log(`Page ${pageIndex}`);
+      console.log(`offset: ${offset}`);
+      console.log(`count: ${PAGE_COUNT}`);
       const raw = await batchGetPublishedArticles(accessToken, offset, PAGE_COUNT);
       const pageError = getWechatError(raw);
-      const itemCount = getNumber(raw.item_count) ?? 0;
+      const itemCount = getNumber(raw.item_count);
       const pageTotalCount = getNumber(raw.total_count);
 
+      if (pageTotalCount === null) {
+        throw new Error("Warning: 微信接口没有返回 total_count，停止同步，避免猜测分页终点");
+      }
+
+      totalCount = pageTotalCount;
+      report.totalCount = totalCount;
+      fetchedItemCount += itemCount ?? 0;
+
       report.pages.push({
+        page: pageIndex,
         offset,
         count: PAGE_COUNT,
-        itemCount,
+        itemCount: itemCount ?? 0,
         totalCount: pageTotalCount,
+        fetchedTotal: fetchedItemCount,
         error: pageError,
       });
+
+      console.log(`item_count: ${itemCount ?? "<missing>"}`);
+      console.log(`total_count: ${totalCount}`);
+      console.log(`fetched_total: ${fetchedItemCount}`);
+      console.log("================================");
 
       if (pageError) {
         throw new Error(`freepublish/batchget 失败：${pageError}`);
       }
-
-      totalCount = pageTotalCount ?? totalCount ?? 0;
-      report.totalCount = totalCount;
 
       const pageArticles = extractArticles(raw);
       report.fetchedCount += pageArticles.length;
@@ -611,11 +648,21 @@ async function main(): Promise<void> {
         console.log(`${articleReport.status}: ${articleReport.title ?? "<无标题>"}`);
       }
 
-      if (itemCount <= 0) {
+      if (itemCount === null) {
+        throw new Error("Warning: 微信接口没有返回 item_count，停止同步，避免猜测下一页 offset");
+      }
+
+      if (itemCount === 0) {
+        console.log("item_count == 0，停止分页同步。");
         break;
       }
 
-      offset += PAGE_COUNT;
+      offset += itemCount;
+      pageIndex += 1;
+
+      if (offset >= totalCount) {
+        console.log(`offset >= total_count (${offset} >= ${totalCount})，分页正常结束。`);
+      }
     }
 
     report = summarizeReport({
@@ -633,6 +680,7 @@ async function main(): Promise<void> {
   } finally {
     connection.release();
     await pool.end();
+    printFinalSummary(report);
     writeReport(report);
   }
 }
@@ -645,6 +693,7 @@ main().catch((error: unknown) => {
     databaseName: null,
     totalCount: null,
     fetchedCount: 0,
+    pageCount: 0,
     inserted: 0,
     updated: 0,
     failed: 1,
